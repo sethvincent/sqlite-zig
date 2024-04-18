@@ -984,6 +984,15 @@ pub fn assertOkay(sqlite_rc: c_int) void {
     }
 }
 
+fn zigSqliteDefaultLogHandler(userdata: ?*anyopaque, errcode: c_int, msg: ?[*:0]const u8) callconv(.C) void {
+    _ = userdata;
+    log.err("{} {?s}", .{ errcode, msg });
+}
+
+pub fn configDefaultLogHandler() !void {
+    _ = try checkSqliteErr(sqlite3_config(@intFromEnum(ConfigOption.log), &zigSqliteDefaultLogHandler, @as(?*anyopaque, null)));
+}
+
 test {
     _ = SQLite3;
     _ = Stmt;
