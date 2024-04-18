@@ -112,6 +112,21 @@ pub const SQLite3 = opaque {
 
         return pp_stmt;
     }
+
+    /// Prepare a sql statement with at least one statement. Passing in more than one statment
+    /// will result in the following statements being ignored.
+    ///
+    /// Returns:
+    /// - A prepared statment if the string contains at least one statement
+    /// - `error.Empty` when the string contains no statment
+    /// - Any other error that prepare_v2 can throw
+    pub fn prepareOne(this: *@This(), sql: []const u8) !*Stmt {
+        var pp_stmt: ?*Stmt = null;
+        errdefer _ = Stmt.sqlite3_finalize(pp_stmt);
+        _ = try checkSqliteErr(sqlite3_prepare_v2(this, sql.ptr, @intCast(sql.len), &pp_stmt, null));
+
+        return pp_stmt orelse return error.Empty;
+    }
 };
 
 pub const Stmt = opaque {
@@ -963,4 +978,9 @@ pub fn assertOkay(sqlite_rc: c_int) void {
     if (sqlite_rc != SQLITE_OK) {
         std.debug.panic("SQLite returned an error code", .{});
     }
+}
+
+test {
+    _ = SQLite3;
+    _ = Stmt;
 }

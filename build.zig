@@ -28,15 +28,17 @@ pub fn build(b: *Builder) void {
     lib.linkLibC();
     b.installArtifact(lib);
 
-    const tests = b.addTest(.{
+    const test_exe = b.addTest(.{
         .root_source_file = .{ .path = "src/sqlite3.zig" },
         .target = target,
         .optimize = optimize,
     });
-    tests.linkLibrary(lib);
+    test_exe.linkLibrary(lib);
+
+    const run_test = b.addRunArtifact(test_exe);
 
     const test_step = b.step("test", "Run all tests");
-    test_step.dependOn(&tests.step);
+    test_step.dependOn(&run_test.step);
 
     const all_example_step = b.step("examples", "Build examples");
     inline for (EXAMPLES) |example_name| {
