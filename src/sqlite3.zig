@@ -146,7 +146,7 @@ pub const Stmt = opaque {
     pub fn columnBlob(this: *@This(), iCol: c_int) ?[]const u8 {
         const blob_ptr = sqlite3_column_blob(this, iCol) orelse return null;
         const blob_len = sqlite3_column_bytes(this, iCol);
-        return @as([*]const u8, blob_ptr)[0..@intCast(blob_len)];
+        return @as([*]const u8, @ptrCast(blob_ptr))[0..@intCast(blob_len)];
     }
 
     pub fn columnInt(this: *@This(), iCol: c_int) c_int {
@@ -167,6 +167,51 @@ pub const Stmt = opaque {
         const text_ptr = sqlite3_column_text(this, iCol) orelse return null;
         const text_len = sqlite3_column_bytes16(this, iCol) / @sizeOf(u16);
         return text_ptr[0..@intCast(text_len) :0];
+    }
+
+    test columnBlob {
+        const db = try SQLite3.open(":memory:");
+        defer db.close() catch unreachable;
+
+        try db.exec(
+            \\ CREATE TABLE leetwords(
+            \\   bytes BLOB,
+            \\ );
+            \\ INSERT INTO leetwords(bytes)
+            \\ VALUES
+            \\   (x'cafe8a8e'),
+            \\   (x'beef'),
+            \\   (x'1337'),
+            \\ ;
+        ,
+            null,
+            null,
+            null,
+        );
+
+        var stmt = (try db.prepare_v2("SELECT bytes FROM leetwords;", null)).?;
+        defer stmt.finalize() catch unreachable;
+
+        switch (try stmt.step()) {
+            .Done => return error.MissingData,
+            .Row => {},
+            .Ok => unreachable,
+        }
+        try std.testing.expectEqualSlices(u8, "\xca\xfe\x8a\x8e", stmt.columnBlob(0) orelse return error.NullData);
+
+        switch (try stmt.step()) {
+            .Done => return error.MissingData,
+            .Row => {},
+            .Ok => unreachable,
+        }
+        try std.testing.expectEqualSlices(u8, "\xbe\xef", stmt.columnBlob(0) orelse return error.NullData);
+
+        switch (try stmt.step()) {
+            .Done => return error.MissingData,
+            .Row => {},
+            .Ok => unreachable,
+        }
+        try std.testing.expectEqualSlices(u8, "\x13\x37", stmt.columnBlob(0) orelse return error.NullData);
     }
 
     // TODO: Supprt columnValue as well (it has a bunch of caveats listed, focus on it later)
