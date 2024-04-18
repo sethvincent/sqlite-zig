@@ -141,7 +141,7 @@ pub const Stmt = opaque {
 
     pub extern fn sqlite3_column_bytes(*Stmt, iCol: c_int) c_int;
     pub extern fn sqlite3_column_bytes16(*Stmt, iCol: c_int) c_int;
-    pub extern fn sqlite3_column_type(*Stmt, iCol: c_int) c_int;
+    pub extern fn sqlite3_column_type(*Stmt, iCol: c_int) SQLiteType;
 
     pub fn columnBlob(this: *@This(), iCol: c_int) ?[]const u8 {
         const blob_ptr = sqlite3_column_blob(this, iCol) orelse return null;
@@ -149,13 +149,9 @@ pub const Stmt = opaque {
         return @as([*]const u8, @ptrCast(blob_ptr))[0..@intCast(blob_len)];
     }
 
-    pub fn columnInt(this: *@This(), iCol: c_int) c_int {
-        return sqlite3_column_int(this, iCol);
-    }
-
-    pub fn columnInt64(this: *@This(), iCol: c_int) i64 {
-        return sqlite3_column_int64(this, iCol);
-    }
+    pub const columnDouble = sqlite3_column_double;
+    pub const columnInt = sqlite3_column_int;
+    pub const columnInt64 = sqlite3_column_int64;
 
     pub fn columnText(this: *@This(), iCol: c_int) ?[:0]const u8 {
         const text_ptr = sqlite3_column_text(this, iCol) orelse return null;
@@ -217,10 +213,7 @@ pub const Stmt = opaque {
     // TODO: Supprt columnValue as well (it has a bunch of caveats listed, focus on it later)
     pub const columnBytes = sqlite3_column_bytes;
     pub const columnBytes16 = sqlite3_column_bytes16;
-
-    pub fn columnType(this: *@This(), iCol: c_int) SQLiteType {
-        return @as(SQLiteType, sqlite3_column_type(this, iCol));
-    }
+    pub const columnType = sqlite3_column_type;
 
     // bind
     pub extern fn sqlite3_bind_blob(*Stmt, iCol: c_int, value: ?*const anyopaque, len: c_int, ?DestructorFn) c_int;
