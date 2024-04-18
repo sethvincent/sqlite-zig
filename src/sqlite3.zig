@@ -183,16 +183,20 @@ pub const Stmt = opaque {
     test columnBlob {
         const db = try SQLite3.open(":memory:");
         defer db.close() catch unreachable;
+        errdefer {
+            const msg = db.errmsg();
+            if (msg.len > 0) {
+                log.err("{s}", .{msg});
+            }
+        }
 
         try db.exec(
-            \\ CREATE TABLE leetwords(
-            \\   bytes BLOB,
-            \\ );
+            \\ CREATE TABLE leetwords(bytes BLOB);
             \\ INSERT INTO leetwords(bytes)
             \\ VALUES
             \\   (x'cafe8a8e'),
             \\   (x'beef'),
-            \\   (x'1337'),
+            \\   (x'1337')
             \\ ;
         ,
             null,
