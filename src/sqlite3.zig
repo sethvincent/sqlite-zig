@@ -127,6 +127,14 @@ pub const SQLite3 = opaque {
 
         return pp_stmt orelse return error.Empty;
     }
+
+    test prepareOne {
+        const db = try SQLite3.open(":memory:");
+        defer db.close() catch unreachable;
+
+        var stmt = try db.prepareOne("PRAGMA pragma_list");
+        defer stmt.finalize() catch unreachable;
+    }
 };
 
 pub const Stmt = opaque {
