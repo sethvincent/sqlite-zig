@@ -17,8 +17,8 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    lib.installHeader("src/sqlite3.h", "sqlite3.h");
-    lib.installHeader("src/sqlite3ext.h", "sqlite3ext.h");
+    lib.installHeader(.{ .path = "src/sqlite3.h" }, "sqlite3.h");
+    lib.installHeader(.{ .path = "src/sqlite3ext.h" }, "sqlite3ext.h");
     lib.addCSourceFile(.{ .file = .{ .path = "src/sqlite3.c" } });
     lib.linkLibC();
     b.installArtifact(lib);
@@ -41,15 +41,17 @@ pub fn build(b: *std.Build) void {
     });
     module.linkLibrary(lib);
 
-    const tests = b.addTest(.{
+    const test_exe = b.addTest(.{
         .root_source_file = .{ .path = "src/sqlite3.zig" },
         .target = target,
         .optimize = optimize,
     });
-    tests.linkLibrary(lib);
+    test_exe.linkLibrary(lib);
+
+    const test_run = b.addRunArtifact(test_exe);
 
     const test_step = b.step("test", "Run all tests");
-    test_step.dependOn(&tests.step);
+    test_step.dependOn(&test_run.step);
 
     const all_example_step = b.step("examples", "Build examples");
     inline for (EXAMPLES) |example_name| {
