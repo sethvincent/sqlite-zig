@@ -112,6 +112,29 @@ pub const SQLite3 = opaque {
 
         return pp_stmt;
     }
+
+    /// Prepare a sql statement with at least one statement. Passing in more than one statment
+    /// will result in the following statements being ignored.
+    ///
+    /// Returns:
+    /// - A prepared statment if the string contains at least one statement
+    /// - `error.Empty` when the string contains no statment
+    /// - Any other error that prepare_v2 can throw
+    pub fn prepareOne(this: *@This(), sql: []const u8) !*Stmt {
+        var pp_stmt: ?*Stmt = null;
+        errdefer _ = Stmt.sqlite3_finalize(pp_stmt);
+        _ = try checkSqliteErr(sqlite3_prepare_v2(this, sql.ptr, @intCast(sql.len), &pp_stmt, null));
+
+        return pp_stmt orelse return error.Empty;
+    }
+
+    test prepareOne {
+        const db = try SQLite3.open(":memory:");
+        defer db.close() catch unreachable;
+
+        var stmt = try db.prepareOne("PRAGMA pragma_list");
+        defer stmt.finalize() catch unreachable;
+    }
 };
 
 pub const Stmt = opaque {
@@ -141,21 +164,17 @@ pub const Stmt = opaque {
 
     pub extern fn sqlite3_column_bytes(*Stmt, iCol: c_int) c_int;
     pub extern fn sqlite3_column_bytes16(*Stmt, iCol: c_int) c_int;
-    pub extern fn sqlite3_column_type(*Stmt, iCol: c_int) c_int;
+    pub extern fn sqlite3_column_type(*Stmt, iCol: c_int) SQLiteType;
 
     pub fn columnBlob(this: *@This(), iCol: c_int) ?[]const u8 {
         const blob_ptr = sqlite3_column_blob(this, iCol) orelse return null;
         const blob_len = sqlite3_column_bytes(this, iCol);
-        return @as([*]const u8, blob_ptr)[0..@intCast(blob_len)];
+        return @as([*]const u8, @ptrCast(blob_ptr))[0..@intCast(blob_len)];
     }
 
-    pub fn columnInt(this: *@This(), iCol: c_int) c_int {
-        return sqlite3_column_int(this, iCol);
-    }
-
-    pub fn columnInt64(this: *@This(), iCol: c_int) i64 {
-        return sqlite3_column_int64(this, iCol);
-    }
+    pub const columnDouble = sqlite3_column_double;
+    pub const columnInt = sqlite3_column_int;
+    pub const columnInt64 = sqlite3_column_int64;
 
     pub fn columnText(this: *@This(), iCol: c_int) ?[:0]const u8 {
         const text_ptr = sqlite3_column_text(this, iCol) orelse return null;
@@ -169,13 +188,59 @@ pub const Stmt = opaque {
         return text_ptr[0..@intCast(text_len) :0];
     }
 
+    test columnBlob {
+        const db = try SQLite3.open(":memory:");
+        defer db.close() catch unreachable;
+        errdefer {
+            const msg = db.errmsg();
+            if (msg.len > 0) {
+                log.err("{s}", .{msg});
+            }
+        }
+
+        try db.exec(
+            \\ CREATE TABLE leetwords(bytes BLOB);
+            \\ INSERT INTO leetwords(bytes)
+            \\ VALUES
+            \\   (x'cafe8a8e'),
+            \\   (x'beef'),
+            \\   (x'1337')
+            \\ ;
+        ,
+            null,
+            null,
+            null,
+        );
+
+        var stmt = (try db.prepare_v2("SELECT bytes FROM leetwords;", null)).?;
+        defer stmt.finalize() catch unreachable;
+
+        switch (try stmt.step()) {
+            .Done => return error.MissingData,
+            .Row => {},
+            .Ok => unreachable,
+        }
+        try std.testing.expectEqualSlices(u8, "\xca\xfe\x8a\x8e", stmt.columnBlob(0) orelse return error.NullData);
+
+        switch (try stmt.step()) {
+            .Done => return error.MissingData,
+            .Row => {},
+            .Ok => unreachable,
+        }
+        try std.testing.expectEqualSlices(u8, "\xbe\xef", stmt.columnBlob(0) orelse return error.NullData);
+
+        switch (try stmt.step()) {
+            .Done => return error.MissingData,
+            .Row => {},
+            .Ok => unreachable,
+        }
+        try std.testing.expectEqualSlices(u8, "\x13\x37", stmt.columnBlob(0) orelse return error.NullData);
+    }
+
     // TODO: Supprt columnValue as well (it has a bunch of caveats listed, focus on it later)
     pub const columnBytes = sqlite3_column_bytes;
     pub const columnBytes16 = sqlite3_column_bytes16;
-
-    pub fn columnType(this: *@This(), iCol: c_int) SQLiteType {
-        return @as(SQLiteType, sqlite3_column_type(this, iCol));
-    }
+    pub const columnType = sqlite3_column_type;
 
     // bind
     pub extern fn sqlite3_bind_blob(*Stmt, iCol: c_int, value: ?*const anyopaque, len: c_int, ?DestructorFn) c_int;
@@ -925,4 +990,18 @@ pub fn assertOkay(sqlite_rc: c_int) void {
     if (sqlite_rc != SQLITE_OK) {
         std.debug.panic("SQLite returned an error code", .{});
     }
+}
+
+fn zigSqliteDefaultLogHandler(userdata: ?*anyopaque, errcode: c_int, msg: ?[*:0]const u8) callconv(.C) void {
+    _ = userdata;
+    log.err("{} {?s}", .{ errcode, msg });
+}
+
+pub fn configDefaultLogHandler() !void {
+    _ = try checkSqliteErr(sqlite3_config(@intFromEnum(ConfigOption.log), &zigSqliteDefaultLogHandler, @as(?*anyopaque, null)));
+}
+
+test {
+    _ = SQLite3;
+    _ = Stmt;
 }
